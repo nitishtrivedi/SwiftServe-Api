@@ -21,6 +21,8 @@ namespace SwiftServe_API.Services
         public async Task<string> UploadImage(IFormFile file)
         {
             using var stream = file.OpenReadStream();
+            if (file == null || file.Length == 0)
+                throw new Exception("Invalid image file");
 
             var uploadParams = new ImageUploadParams
             {

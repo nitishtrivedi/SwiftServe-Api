@@ -80,6 +80,7 @@ builder.Services.AddScoped<SuperAdminService>();
 builder.Services.AddScoped<RestaurantService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<MenuService>();
+builder.Services.AddScoped<MenuItemService>();
 builder.Services.AddScoped<CloudinaryService>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<OrderService>();

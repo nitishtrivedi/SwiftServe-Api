@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SwiftServe_API.DTOs;
 using SwiftServe_API.Services;
 
 namespace SwiftServe_API.Controllers

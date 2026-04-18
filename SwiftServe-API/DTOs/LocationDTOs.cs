@@ -1,4 +1,4 @@
-﻿namespace SwiftServe_API.Controllers
+﻿namespace SwiftServe_API.DTOs
 {
     public class UpdateLocationDto
     {

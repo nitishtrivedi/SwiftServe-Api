@@ -4,26 +4,26 @@ using SwiftServe_API.Repositories;
 
 namespace SwiftServe_API.Services
 {
-    public class MenuService
+    public class MenuItemService
     {
         private readonly IRepository<MenuItem> _repo;
         private readonly IRepository<Category> _categoryRepo;
         private readonly IRepository<Restaurant> _restaurantRepo;
-        private readonly CloudinaryService _cloudinary;
         private readonly IHttpContextAccessor _http;
+        private readonly CloudinaryService _cloudinary;
 
-        public MenuService(
+        public MenuItemService(
             IRepository<MenuItem> repo,
-            IRepository<Restaurant> restaurantRepo,
             IRepository<Category> categoryRepo,
-            CloudinaryService cloudinary,
-            IHttpContextAccessor http)
+            IRepository<Restaurant> restaurantRepo,
+            IHttpContextAccessor http,
+            CloudinaryService cloudinary)
         {
             _repo = repo;
             _categoryRepo = categoryRepo;
             _restaurantRepo = restaurantRepo;
-            _cloudinary = cloudinary;
             _http = http;
+            _cloudinary = cloudinary;
         }
 
         private int GetTenantId()
@@ -36,9 +36,8 @@ namespace SwiftServe_API.Services
             return int.Parse(claim);
         }
 
-        // ================= CREATE =================
-
-        public async Task CreateMenuItem(CreateMenuItemDto dto, IFormFile file)
+        // ✅ CREATE
+        public async Task Create(CreateMenuItemDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Name))
                 throw new Exception("Name required");
@@ -56,8 +55,10 @@ namespace SwiftServe_API.Services
 
             string imageUrl = null;
 
-            if (file != null)
-                imageUrl = await _cloudinary.UploadImage(file);
+            if (dto.File != null)
+            {
+                imageUrl = await _cloudinary.UploadImage(dto.File);
+            }
 
             var item = new MenuItem
             {
@@ -76,46 +77,48 @@ namespace SwiftServe_API.Services
             await _repo.Save();
         }
 
-        // ================= READ =================
-
-        public List<object> GetMenu(int restaurantId)
+        // ✅ GET MENU (PUBLIC)
+        public List<MenuItemResponseDto> GetByRestaurant(int restaurantId)
         {
             return _repo.GetAll()
                 .Where(x => x.RestaurantId == restaurantId && !x.IsDeleted && x.IsAvailable)
-                .Select(x => new
+                .Select(x => new MenuItemResponseDto
                 {
-                    x.Id,
-                    x.Name,
-                    x.Description,
-                    x.Price,
-                    x.ImageUrl,
-                    x.CategoryId
+                    Id = x.Id,
+                    RestaurantId = x.RestaurantId,
+                    CategoryId = x.CategoryId,
+                    Name = x.Name,
+                    Description = x.Description,
+                    Price = x.Price,
+                    ImageUrl = x.ImageUrl,
+                    IsAvailable = x.IsAvailable
                 })
-                .ToList<object>();
+                .ToList();
         }
 
-        public async Task<object> GetMenuItemById(int id)
+        // ✅ GET BY ID
+        public async Task<MenuItemResponseDto> GetById(int id)
         {
             var item = await _repo.GetById(id);
 
             if (item == null || item.IsDeleted)
                 throw new Exception("Item not found");
 
-            return new
+            return new MenuItemResponseDto
             {
-                item.Id,
-                item.Name,
-                item.Description,
-                item.Price,
-                item.ImageUrl,
-                item.CategoryId,
-                item.IsAvailable
+                Id = item.Id,
+                RestaurantId = item.RestaurantId,
+                CategoryId = item.CategoryId,
+                Name = item.Name,
+                Description = item.Description,
+                Price = item.Price,
+                ImageUrl = item.ImageUrl,
+                IsAvailable = item.IsAvailable
             };
         }
 
-        // ================= UPDATE =================
-
-        public async Task UpdateMenuItem(int id, UpdateMenuItemDto dto, IFormFile file)
+        // ✅ UPDATE
+        public async Task Update(int id, UpdateMenuItemDto dto)
         {
             var item = await _repo.GetById(id);
 
@@ -131,9 +134,9 @@ namespace SwiftServe_API.Services
             item.Price = dto.Price;
             item.IsAvailable = dto.IsAvailable;
 
-            if (file != null)
+            if (dto.File != null)
             {
-                var imageUrl = await _cloudinary.UploadImage(file);
+                var imageUrl = await _cloudinary.UploadImage(dto.File);
                 item.ImageUrl = imageUrl;
             }
 
@@ -142,9 +145,8 @@ namespace SwiftServe_API.Services
             await _repo.Save();
         }
 
-        // ================= DELETE =================
-
-        public async Task DeleteMenuItem(int id)
+        // ✅ DELETE (SOFT)
+        public async Task Delete(int id)
         {
             var item = await _repo.GetById(id);
 

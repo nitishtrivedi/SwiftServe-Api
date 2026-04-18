@@ -17,10 +17,67 @@ namespace SwiftServe_API.Controllers
             _service = service;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Place(PlaceOrderDto dto)
+        // ✅ PLACE ORDER
+        [HttpPost("place")]
+        public async Task<IActionResult> PlaceOrder([FromBody] PlaceOrderDto dto)
         {
-            return Ok(await _service.PlaceOrder(dto));
+            if (dto == null || string.IsNullOrWhiteSpace(dto.DeliveryAddress))
+                return BadRequest("Delivery address is required");
+
+            try
+            {
+                var result = await _service.PlaceOrder(dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ✅ CANCEL ORDER
+        [HttpPost("cancel/{orderId}")]
+        public async Task<IActionResult> CancelOrder(int orderId)
+        {
+            try
+            {
+                await _service.CancelOrder(orderId);
+                return Ok("Order cancelled successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ✅ GET MY ORDERS
+        [HttpGet]
+        public async Task<IActionResult> GetMyOrders()
+        {
+            try
+            {
+                var result = await _service.GetMyOrders();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        // ✅ GET ORDER BY ID
+        [HttpGet("{orderId}")]
+        public async Task<IActionResult> GetOrderById(int orderId)
+        {
+            try
+            {
+                var result = await _service.GetOrderById(orderId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

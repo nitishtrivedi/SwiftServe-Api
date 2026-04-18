@@ -17,17 +17,45 @@ namespace SwiftServe_API.Controllers
             _service = service;
         }
 
-        [HttpPost]
+        // ✅ CREATE (Admin)
+        [HttpPost("admin/categories")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create(CreateCategoryDto dto)
         {
-            await _service.CreateCategory(dto);
+            await _service.Create(dto);
             return Ok("Category created");
         }
 
-        [HttpGet("{restaurantId}")]
-        public IActionResult Get(int restaurantId)
+        // ✅ GET BY RESTAURANT (Public / Customer)
+        [HttpGet("categories/{restaurantId}")]
+        public IActionResult GetByRestaurant(int restaurantId)
         {
             return Ok(_service.GetByRestaurant(restaurantId));
+        }
+
+        // ✅ GET BY ID
+        [HttpGet("categories/detail/{id}")]
+        public async Task<IActionResult> Get(int id)
+        {
+            return Ok(await _service.GetById(id));
+        }
+
+        // ✅ UPDATE (Admin)
+        [HttpPut("admin/categories/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Update(int id, UpdateCategoryDto dto)
+        {
+            await _service.Update(id, dto);
+            return Ok("Updated");
+        }
+
+        // ✅ DELETE (Admin)
+        [HttpDelete("admin/categories/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            await _service.Delete(id);
+            return Ok("Deleted");
         }
     }
 }

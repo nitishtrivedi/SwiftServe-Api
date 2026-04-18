@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using SwiftServe_API.Controllers;
+using SwiftServe_API.DTOs;
 using SwiftServe_API.Enums;
 using SwiftServe_API.Models;
 using SwiftServe_API.Repositories;

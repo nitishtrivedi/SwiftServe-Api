@@ -18,6 +18,7 @@ namespace SwiftServe_API.Models
 
         public double DeliveryLatitude { get; set; }
         public double DeliveryLongitude { get; set; }
+        public string DeliveryAddress { get; set; } = string.Empty;
 
         public int? DeliveryPartnerId { get; set; }
     }

@@ -34,31 +34,23 @@ namespace SwiftServe_API.Services
             return int.Parse(claim);
         }
 
+        // ✅ ADD TO CART
         public async Task AddToCart(AddToCartDto dto)
         {
-            // ✅ VALIDATION
             if (dto.Quantity <= 0)
-                throw new Exception("Quantity must be greater than 0");
-
-            if (dto.MenuItemId <= 0 || dto.RestaurantId <= 0)
-                throw new Exception("Invalid request");
+                throw new Exception("Invalid quantity");
 
             var userId = GetUserId();
 
             var menuItem = await _menuRepo.GetById(dto.MenuItemId);
 
-            if (menuItem == null)
-                throw new Exception("Menu item not found");
-
-            if (!menuItem.IsAvailable)
-                throw new Exception("Item is not available");
-
-            if (menuItem.RestaurantId != dto.RestaurantId)
-                throw new Exception("Item does not belong to restaurant");
+            if (menuItem == null || !menuItem.IsAvailable)
+                throw new Exception("Item not available");
 
             var cart = _cartRepo.GetAll()
                 .FirstOrDefault(x => x.CustomerId == userId && !x.IsCheckedOut);
 
+            // ❌ Prevent mixing restaurants
             if (cart != null && cart.RestaurantId != dto.RestaurantId)
                 throw new Exception("Cannot mix items from different restaurants");
 
@@ -67,7 +59,8 @@ namespace SwiftServe_API.Services
                 cart = new Cart
                 {
                     CustomerId = userId,
-                    RestaurantId = dto.RestaurantId
+                    RestaurantId = dto.RestaurantId,
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 await _cartRepo.Add(cart);
@@ -94,6 +87,7 @@ namespace SwiftServe_API.Services
             await _itemRepo.Save();
         }
 
+        // ✅ GET CART
         public async Task<object> GetCart()
         {
             var userId = GetUserId();
@@ -109,17 +103,18 @@ namespace SwiftServe_API.Services
                 .ToList();
 
             decimal total = 0;
-
-            var resultItems = new List<object>();
+            var result = new List<object>();
 
             foreach (var item in items)
             {
                 var menuItem = await _menuRepo.GetById(item.MenuItemId);
 
+                if (menuItem == null) continue;
+
                 var itemTotal = menuItem.Price * item.Quantity;
                 total += itemTotal;
 
-                resultItems.Add(new
+                result.Add(new
                 {
                     item.MenuItemId,
                     menuItem.Name,
@@ -133,22 +128,81 @@ namespace SwiftServe_API.Services
             {
                 cart.Id,
                 cart.RestaurantId,
-                items = resultItems,
+                items = result,
                 totalAmount = total
             };
         }
 
-        public async Task ClearCart(int cartId)
+        // ✅ CLEAR CART
+        public async Task ClearUserCart()
         {
-            var items = _itemRepo.GetAll().Where(x => x.CartId == cartId);
+            var userId = GetUserId();
+
+            var cart = _cartRepo.GetAll()
+                .FirstOrDefault(x => x.CustomerId == userId && !x.IsCheckedOut);
+
+            if (cart == null)
+                return;
+
+            var items = _itemRepo.GetAll()
+                .Where(x => x.CartId == cart.Id);
 
             foreach (var item in items)
                 item.IsDeleted = true;
 
-            var cart = await _cartRepo.GetById(cartId);
             cart.IsCheckedOut = true;
+            cart.UpdatedAt = DateTime.UtcNow;
 
             await _cartRepo.Save();
+        }
+
+        public async Task UpdateCartItem(UpdateCartItemDto dto)
+        {
+            var userId = GetUserId();
+
+            var cart = _cartRepo.GetAll()
+                .FirstOrDefault(x => x.CustomerId == userId && !x.IsCheckedOut);
+
+            if (cart == null)
+                throw new Exception("Cart not found");
+
+            var item = _itemRepo.GetAll()
+                .FirstOrDefault(x => x.CartId == cart.Id && x.MenuItemId == dto.MenuItemId);
+
+            if (item == null)
+                throw new Exception("Item not found in cart");
+
+            if (dto.Quantity <= 0)
+            {
+                item.IsDeleted = true;
+            }
+            else
+            {
+                item.Quantity = dto.Quantity;
+            }
+
+            await _itemRepo.Save();
+        }
+
+        public async Task RemoveItem(int menuItemId)
+        {
+            var userId = GetUserId();
+
+            var cart = _cartRepo.GetAll()
+                .FirstOrDefault(x => x.CustomerId == userId && !x.IsCheckedOut);
+
+            if (cart == null)
+                throw new Exception("Cart not found");
+
+            var item = _itemRepo.GetAll()
+                .FirstOrDefault(x => x.CartId == cart.Id && x.MenuItemId == menuItemId);
+
+            if (item == null)
+                throw new Exception("Item not found");
+
+            item.IsDeleted = true;
+
+            await _itemRepo.Save();
         }
     }
 }

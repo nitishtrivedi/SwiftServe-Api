@@ -5,6 +5,7 @@
         public int RestaurantId { get; set; }
         public string PaymentMethod { get; set; }
 
+        public string DeliveryAddress { get; set; } = string.Empty;
         public double DeliveryLatitude { get; set; }
         public double DeliveryLongitude { get; set; }
     }

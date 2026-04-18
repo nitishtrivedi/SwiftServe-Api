@@ -17,17 +17,44 @@ namespace SwiftServe_API.Controllers
             _service = service;
         }
 
-        [HttpPost]
+        // ✅ ADD ITEM
+        [HttpPost("add")]
         public async Task<IActionResult> Add(AddToCartDto dto)
         {
             await _service.AddToCart(dto);
-            return Ok("Added to cart");
+            return Ok("Item added to cart");
         }
 
+        // ✅ GET CART
         [HttpGet]
         public async Task<IActionResult> Get()
         {
-            return Ok(await _service.GetCart());
+            var cart = await _service.GetCart();
+            return Ok(cart);
+        }
+
+        // ✅ UPDATE QUANTITY
+        [HttpPut("update")]
+        public async Task<IActionResult> Update(UpdateCartItemDto dto)
+        {
+            await _service.UpdateCartItem(dto);
+            return Ok("Cart updated");
+        }
+
+        // ✅ REMOVE ITEM
+        [HttpDelete("remove/{menuItemId}")]
+        public async Task<IActionResult> Remove(int menuItemId)
+        {
+            await _service.RemoveItem(menuItemId);
+            return Ok("Item removed");
+        }
+
+        // ✅ CLEAR CART
+        [HttpDelete("clear")]
+        public async Task<IActionResult> Clear()
+        {
+            await _service.ClearUserCart();
+            return Ok("Cart cleared");
         }
     }
 }

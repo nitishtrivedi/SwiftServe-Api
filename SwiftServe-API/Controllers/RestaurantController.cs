@@ -24,10 +24,34 @@ namespace SwiftServe_API.Controllers
             return Ok("Restaurant created");
         }
 
+        // ✅ GET ALL
         [HttpGet]
-        public IActionResult Get()
+        public IActionResult GetAll()
         {
-            return Ok(_service.GetMyRestaurants());
+            return Ok(_service.GetAll());
+        }
+
+        // ✅ GET BY ID
+        [HttpGet("{id}")]
+        public async Task<IActionResult> Get(int id)
+        {
+            return Ok(await _service.GetById(id));
+        }
+
+        // ✅ UPDATE
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(int id, UpdateRestaurantDto dto)
+        {
+            await _service.Update(id, dto);
+            return Ok("Updated");
+        }
+
+        // ✅ DELETE
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            await _service.Delete(id);
+            return Ok("Deleted");
         }
     }
 }

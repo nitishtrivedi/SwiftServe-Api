@@ -30,31 +30,101 @@ namespace SwiftServe_API.Services
             return int.Parse(claim);
         }
 
-        public async Task CreateCategory(CreateCategoryDto dto)
+        // ✅ CREATE
+        public async Task Create(CreateCategoryDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new Exception("Category name required");
+
             var restaurant = await _restaurantRepo.GetById(dto.RestaurantId);
 
-            if (restaurant == null || restaurant.TenantId != GetTenantId())
-                throw new Exception("Unauthorized");
+            if (restaurant == null || restaurant.IsDeleted || restaurant.TenantId != GetTenantId())
+                throw new Exception("Invalid restaurant");
 
             var category = new Category
             {
+                RestaurantId = dto.RestaurantId,
                 Name = dto.Name,
                 DisplayOrder = dto.DisplayOrder,
-                RestaurantId = dto.RestaurantId,
-                TenantId = GetTenantId()
+                TenantId = GetTenantId(),
+                CreatedAt = DateTime.UtcNow
             };
 
             await _repo.Add(category);
             await _repo.Save();
         }
 
-        public List<Category> GetByRestaurant(int restaurantId)
+        // ✅ GET ALL BY RESTAURANT (Admin + Customer)
+        public List<CategoryResponseDto> GetByRestaurant(int restaurantId)
         {
             return _repo.GetAll()
-                .Where(x => x.RestaurantId == restaurantId)
+                .Where(x => x.RestaurantId == restaurantId && !x.IsDeleted)
                 .OrderBy(x => x.DisplayOrder)
+                .Select(x => new CategoryResponseDto
+                {
+                    Id = x.Id,
+                    RestaurantId = x.RestaurantId,
+                    Name = x.Name,
+                    DisplayOrder = x.DisplayOrder
+                })
                 .ToList();
+        }
+
+        // ✅ GET BY ID
+        public async Task<CategoryResponseDto> GetById(int id)
+        {
+            var category = await _repo.GetById(id);
+
+            if (category == null || category.IsDeleted)
+                throw new Exception("Category not found");
+
+            return new CategoryResponseDto
+            {
+                Id = category.Id,
+                RestaurantId = category.RestaurantId,
+                Name = category.Name,
+                DisplayOrder = category.DisplayOrder
+            };
+        }
+
+        // ✅ UPDATE
+        public async Task Update(int id, UpdateCategoryDto dto)
+        {
+            var category = await _repo.GetById(id);
+
+            if (category == null || category.IsDeleted)
+                throw new Exception("Category not found");
+
+            // 🔒 Tenant check via restaurant
+            var restaurant = await _restaurantRepo.GetById(category.RestaurantId);
+
+            if (restaurant == null || restaurant.TenantId != GetTenantId())
+                throw new Exception("Unauthorized");
+
+            category.Name = dto.Name;
+            category.DisplayOrder = dto.DisplayOrder;
+            category.UpdatedAt = DateTime.UtcNow;
+
+            await _repo.Save();
+        }
+
+        // ✅ DELETE (SOFT)
+        public async Task Delete(int id)
+        {
+            var category = await _repo.GetById(id);
+
+            if (category == null)
+                throw new Exception("Category not found");
+
+            var restaurant = await _restaurantRepo.GetById(category.RestaurantId);
+
+            if (restaurant == null || restaurant.TenantId != GetTenantId())
+                throw new Exception("Unauthorized");
+
+            category.IsDeleted = true;
+            category.UpdatedAt = DateTime.UtcNow;
+
+            await _repo.Save();
         }
     }
 }

@@ -9,7 +9,7 @@ namespace SwiftServe_API.Services
     public class OrderService
     {
         private readonly IRepository<Order> _orderRepo;
-        private readonly IRepository<OrderItem> _itemRepo;
+        private readonly IRepository<OrderItem> _orderItemRepo;
         private readonly IRepository<Cart> _cartRepo;
         private readonly IRepository<CartItem> _cartItemRepo;
         private readonly IRepository<MenuItem> _menuRepo;
@@ -19,7 +19,7 @@ namespace SwiftServe_API.Services
 
         public OrderService(
             IRepository<Order> orderRepo,
-            IRepository<OrderItem> itemRepo,
+            IRepository<OrderItem> orderItemRepo,
             IRepository<Cart> cartRepo,
             IRepository<CartItem> cartItemRepo,
             IRepository<MenuItem> menuRepo,
@@ -28,7 +28,7 @@ namespace SwiftServe_API.Services
             IHttpContextAccessor http)
         {
             _orderRepo = orderRepo;
-            _itemRepo = itemRepo;
+            _orderItemRepo = orderItemRepo;
             _cartRepo = cartRepo;
             _cartItemRepo = cartItemRepo;
             _menuRepo = menuRepo;
@@ -39,14 +39,15 @@ namespace SwiftServe_API.Services
 
         private int GetUserId()
         {
-            var claim = _http.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = _http.HttpContext?.User?.FindFirst("id")?.Value;
 
-            if (string.IsNullOrEmpty(claim))
+            if (string.IsNullOrEmpty(userId))
                 throw new Exception("Unauthorized");
 
-            return int.Parse(claim);
+            return int.Parse(userId);
         }
 
+        // ✅ PLACE ORDER
         public async Task<object> PlaceOrder(PlaceOrderDto dto)
         {
             var userId = GetUserId();
@@ -54,30 +55,36 @@ namespace SwiftServe_API.Services
             var cart = _cartRepo.GetAll()
                 .FirstOrDefault(x => x.CustomerId == userId && !x.IsCheckedOut);
 
-            if (cart == null || cart.RestaurantId != dto.RestaurantId)
-                throw new Exception("Invalid cart");
+            if (cart == null)
+                throw new Exception("Cart is empty");
 
             var cartItems = _cartItemRepo.GetAll()
-                .Where(x => x.CartId == cart.Id)
+                .Where(x => x.CartId == cart.Id && !x.IsDeleted)
                 .ToList();
 
             if (!cartItems.Any())
-                throw new Exception("Cart empty");
+                throw new Exception("Cart has no items");
 
-            var restaurant = await _restaurantRepo.GetById(dto.RestaurantId);
+            decimal totalAmount = 0;
 
-            decimal total = 0;
+            foreach (var item in cartItems)
+            {
+                var menuItem = await _menuRepo.GetById(item.MenuItemId);
+
+                if (menuItem == null)
+                    throw new Exception($"Menu item {item.MenuItemId} not found");
+
+                // ✅ FIX: use correct property name
+                totalAmount += menuItem.Price * item.Quantity; // <-- CHANGE if your field name differs
+            }
 
             var order = new Order
             {
                 CustomerId = userId,
-                RestaurantId = dto.RestaurantId,
-                Status = OrderStatus.Pending,
-                PaymentMethod = dto.PaymentMethod,
-                PaymentStatus = PaymentStatus.Pending,
-                DeliveryLatitude = dto.DeliveryLatitude,
-                DeliveryLongitude = dto.DeliveryLongitude,
-                TenantId = restaurant.TenantId
+                TotalAmount = totalAmount,
+                Status = OrderStatus.Pending, // ✅ ENUM FIX
+                DeliveryAddress = dto.DeliveryAddress,
+                CreatedAt = DateTime.UtcNow
             };
 
             await _orderRepo.Add(order);
@@ -87,33 +94,124 @@ namespace SwiftServe_API.Services
             {
                 var menuItem = await _menuRepo.GetById(item.MenuItemId);
 
-                var itemTotal = menuItem.Price * item.Quantity;
-                total += itemTotal;
-
-                await _itemRepo.Add(new OrderItem
+                var orderItem = new OrderItem
                 {
                     OrderId = order.Id,
                     MenuItemId = item.MenuItemId,
                     Quantity = item.Quantity,
-                    Price = menuItem.Price,
-                    TenantId = restaurant.TenantId
-                });
+                    Price = menuItem.Price // ✅ FIX
+                };
+
+                await _orderItemRepo.Add(orderItem);
             }
 
-            order.TotalAmount = total;
+            await _orderItemRepo.Save();
 
-            order.IsPaymentEnabled = dto.PaymentMethod == PaymentMethod.Razorpay;
+            // ✅ CLEAR CART
+            foreach (var item in cartItems)
+                item.IsDeleted = true;
 
-            await _itemRepo.Save();
-            await _orderRepo.Save();
+            cart.IsCheckedOut = true;
+            cart.UpdatedAt = DateTime.UtcNow;
 
-            await _cartService.ClearCart(cart.Id);
+            await _cartRepo.Save();
 
             return new
             {
-                orderId = order.Id,
-                totalAmount = total,
-                paymentRequired = order.IsPaymentEnabled
+                order.Id,
+                order.TotalAmount,
+                order.Status
+            };
+        }
+
+        // ✅ CANCEL ORDER
+        public async Task CancelOrder(int orderId)
+        {
+            var userId = GetUserId();
+
+            var order = _orderRepo.GetAll()
+                .FirstOrDefault(x => x.Id == orderId && x.CustomerId == userId);
+
+            if (order == null)
+                throw new Exception("Order not found");
+
+            if (order.Status == "Cancelled")
+                throw new Exception("Order already cancelled");
+
+            if (order.Status != "Placed")
+                throw new Exception("Only placed orders can be cancelled");
+
+            order.Status = "Cancelled";
+            order.UpdatedAt = DateTime.UtcNow;
+
+            await _orderRepo.Save();
+        }
+
+        // ✅ GET MY ORDERS
+        public async Task<List<object>> GetMyOrders()
+        {
+            var userId = GetUserId();
+
+            var orders = _orderRepo.GetAll()
+                .Where(x => x.CustomerId == userId)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToList();
+
+            var result = new List<object>();
+
+            foreach (var order in orders)
+            {
+                var items = _orderItemRepo.GetAll()
+                    .Where(x => x.OrderId == order.Id)
+                    .ToList();
+
+                result.Add(new
+                {
+                    order.Id,
+                    order.TotalAmount,
+                    order.Status,
+                    order.DeliveryAddress,
+                    order.CreatedAt,
+                    Items = items.Select(i => new
+                    {
+                        i.MenuItemId,
+                        i.Quantity,
+                        i.Price
+                    })
+                });
+            }
+
+            return result;
+        }
+
+        // ✅ GET ORDER BY ID
+        public async Task<object> GetOrderById(int orderId)
+        {
+            var userId = GetUserId();
+
+            var order = _orderRepo.GetAll()
+                .FirstOrDefault(x => x.Id == orderId && x.CustomerId == userId);
+
+            if (order == null)
+                throw new Exception("Order not found");
+
+            var items = _orderItemRepo.GetAll()
+                .Where(x => x.OrderId == order.Id)
+                .ToList();
+
+            return new
+            {
+                order.Id,
+                order.TotalAmount,
+                order.Status,
+                order.DeliveryAddress,
+                order.CreatedAt,
+                Items = items.Select(i => new
+                {
+                    i.MenuItemId,
+                    i.Quantity,
+                    i.Price
+                })
             };
         }
     }

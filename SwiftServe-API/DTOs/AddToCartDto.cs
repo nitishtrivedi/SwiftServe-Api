@@ -6,4 +6,10 @@
         public int MenuItemId { get; set; }
         public int Quantity { get; set; }
     }
+
+    public class UpdateCartItemDto
+    {
+        public int MenuItemId { get; set; }
+        public int Quantity { get; set; }
+    }
 }
